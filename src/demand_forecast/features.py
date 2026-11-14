@@ -15,6 +15,8 @@ from demand_forecast.data import HOSPITALS, MEDICINES, is_ramadan
 HORIZON = 14
 LAGS = (14, 21, 28, 35)
 WINDOWS = (7, 28, 56)
+# Days of history needed before the first row has every feature.
+MAX_LOOKBACK = HORIZON + max(WINDOWS)
 
 _HOSPITAL_CODE = {h.hospital_id: i for i, h in enumerate(HOSPITALS)}
 _MEDICINE_CODE = {m.medicine_id: i for i, m in enumerate(MEDICINES)}
@@ -50,14 +52,26 @@ def add_codes(df: pd.DataFrame) -> pd.DataFrame:
         KeyError: for a hospital or medicine the model does not know.
     """
     out = df.copy()
-    unknown_h = set(out["hospital_id"]) - _HOSPITAL_CODE.keys()
-    unknown_m = set(out["medicine_id"]) - _MEDICINE_CODE.keys()
-    if unknown_h or unknown_m:
-        raise KeyError(f"Unknown ids: {sorted(unknown_h | unknown_m)}")
+    unknown = (
+        (set(out["hospital_id"]) - _HOSPITAL_CODE.keys())
+        | (set(out["medicine_id"]) - _MEDICINE_CODE.keys())
+        | (set(out["category"]) - _CATEGORY_CODE.keys())
+    )
+    if unknown:
+        raise KeyError(f"Unknown ids: {sorted(unknown)}")
     out["hospital_code"] = out["hospital_id"].map(_HOSPITAL_CODE)
     out["medicine_code"] = out["medicine_id"].map(_MEDICINE_CODE)
     out["category_code"] = out["category"].map(_CATEGORY_CODE)
     return out
+
+
+def _check_consecutive_days(df: pd.DataFrame) -> None:
+    """Lags are computed by position, so each series must have exactly one row per day."""
+    steps = pd.to_datetime(df["date"]).groupby([df["hospital_id"], df["medicine_id"]]).diff()
+    if (steps.dropna() != pd.Timedelta(days=1)).any():
+        raise ValueError(
+            "Each hospital/medicine series must have consecutive days with no gaps or duplicates"
+        )
 
 
 def make_features(df: pd.DataFrame, dropna: bool = True) -> pd.DataFrame:
@@ -68,6 +82,7 @@ def make_features(df: pd.DataFrame, dropna: bool = True) -> pd.DataFrame:
         dropna: drop rows that do not yet have enough history for every feature.
     """
     out = df.sort_values(["hospital_id", "medicine_id", "date"]).reset_index(drop=True)
+    _check_consecutive_days(out)
     out = add_codes(add_calendar_features(out))
     grouped = out.groupby(["hospital_id", "medicine_id"], sort=False)["units"]
 

@@ -83,6 +83,10 @@ RAMADAN_PERIODS = (
     (dt.date(2024, 3, 11), dt.date(2024, 4, 9)),
     (dt.date(2025, 3, 1), dt.date(2025, 3, 29)),
     (dt.date(2026, 2, 18), dt.date(2026, 3, 19)),
+    (dt.date(2027, 2, 8), dt.date(2027, 3, 9)),
+    (dt.date(2028, 1, 28), dt.date(2028, 2, 25)),
+    (dt.date(2029, 1, 16), dt.date(2029, 2, 13)),
+    (dt.date(2030, 1, 6), dt.date(2030, 2, 4)),
 )
 OUTBREAK_CATEGORIES = {"Antibiotic", "Respiratory"}
 

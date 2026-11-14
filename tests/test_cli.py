@@ -109,3 +109,34 @@ def test_forecast_for_unknown_medicine_is_an_error(tmp_path, capsys):
 
     assert code == 2
     assert "ASPIRIN" in capsys.readouterr().err
+
+
+def test_missing_model_file_is_a_friendly_error(tmp_path, capsys):
+    data = tmp_path / "demand.csv"
+    cli.main(["generate", "--start", "2025-01-01", "--end", "2025-01-31", "--out", str(data)])
+
+    code = cli.main(
+        [
+            "forecast",
+            "--data",
+            str(data),
+            "--model",
+            str(tmp_path / "nope.joblib"),
+            "--hospital",
+            "H01",
+            "--medicine",
+            "AMOXICILLIN",
+            "--stock",
+            "1",
+        ]
+    )
+
+    assert code == 2
+    assert "train" in capsys.readouterr().err
+
+
+def test_missing_data_file_is_a_friendly_error(tmp_path, capsys):
+    code = cli.main(["train", "--data", str(tmp_path / "missing.csv")])
+
+    assert code == 2
+    assert "generate" in capsys.readouterr().err

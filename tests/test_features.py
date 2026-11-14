@@ -99,3 +99,18 @@ def test_calendar_features():
     assert feats.loc[friday, "is_weekend"] == 1
     assert feats.loc[friday, "is_ramadan"] == 1
     assert -1 <= feats.loc[friday, "doy_sin"] <= 1
+
+
+def test_missing_days_are_rejected():
+    df = one_series(list(range(100))).drop(index=[40])
+
+    with pytest.raises(ValueError, match="consecutive"):
+        make_features(df)
+
+
+def test_duplicate_days_are_rejected():
+    df = one_series(list(range(100)))
+    df = pd.concat([df, df.iloc[[10]]], ignore_index=True)
+
+    with pytest.raises(ValueError, match="consecutive"):
+        make_features(df)

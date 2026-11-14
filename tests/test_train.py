@@ -5,12 +5,17 @@ from __future__ import annotations
 import datetime as dt
 import json
 
+import numpy as np
 import pandas as pd
 import pytest
 
+import demand_forecast.evaluate as ev
+from demand_forecast.evaluate import backtest
+from demand_forecast.features import make_features
 from demand_forecast.forecast import ModelBundle, forecast_series, recommend
-from demand_forecast.models import MODEL_FACTORIES
+from demand_forecast.models import MODEL_FACTORIES, SeasonalNaive
 from demand_forecast.train import split_periods, train
+from demand_forecast.uncertainty import UncertaintyModel
 
 FAST_MODELS = {k: MODEL_FACTORIES[k] for k in ("Seasonal naive", "Gradient boosting")}
 
@@ -62,6 +67,8 @@ def test_metrics_json_contains_both_evaluation_stages(trained):
     assert {row["model"] for row in data["validation"]} == set(FAST_MODELS)
     assert {row["model"] for row in data["holdout"]} == set(FAST_MODELS)
     assert data["data"]["series"] == 6
+    assert set(data["safety_stock_coverage_95"]) == {"3", "7", "14"}
+    assert all(0 <= v <= 1 for v in data["safety_stock_coverage_95"].values())
 
 
 def test_bundle_round_trip(trained):
@@ -71,7 +78,8 @@ def test_bundle_round_trip(trained):
 
     assert bundle.name == "Gradient boosting"
     assert bundle.trained_until == dt.date(2025, 2, 28)
-    assert bundle.error_std[("H01", "AMOXICILLIN")] > 0
+    assert bundle.uncertainty.series_std[("H01", "AMOXICILLIN")] > 0
+    assert len(bundle.uncertainty.factors) == 14
 
 
 def test_forecast_covers_the_next_14_days(trained, small_demand):
@@ -141,3 +149,55 @@ def test_training_on_too_little_data_fails_clearly():
 
     with pytest.raises(ValueError, match="history"):
         train(tiny, "unused", "unused", factories=FAST_MODELS)
+
+
+class GoodOnlyInSummer(SeasonalNaive):
+    """Stand-in model; the test below makes it perfect in May-Oct and useless otherwise."""
+
+
+def test_selection_ignores_the_holdout(small_demand, tmp_path, monkeypatch):
+    """A model that wins on validation must be chosen even if it loses on the holdout."""
+
+    original = ev.backtest
+
+    def backtest_with_truth(feats, factory, origins):
+        preds = original(feats, factory, origins)
+        if factory is GoodOnlyInSummer:
+            summer = pd.to_datetime(preds["date"]).dt.month.between(5, 10)
+            preds["prediction"] = np.where(summer, preds["units"], 0.0)
+        return preds
+
+    monkeypatch.setattr(ev, "backtest", backtest_with_truth)
+    factories = {
+        "Summer only": GoodOnlyInSummer,
+        "Gradient boosting": FAST_MODELS["Gradient boosting"],
+    }
+
+    result = train(small_demand, tmp_path / "m", tmp_path / "r", factories=factories)
+
+    hold = result.holdout_scores.set_index("model")["wape"]
+    assert hold["Summer only"] > hold["Gradient boosting"]  # loses on the holdout...
+    assert result.best_model == "Summer only"  # ...but was chosen on validation
+
+
+def test_serving_gives_the_same_forecast_as_the_backtest(small_demand):
+    """Train/serve consistency: same model + same history -> same numbers."""
+    origin = dt.date(2025, 1, 15)
+    feats = make_features(small_demand)
+    backtested = backtest(feats, SeasonalNaive, [origin])
+    expected = (
+        backtested[(backtested.hospital_id == "H01") & (backtested.medicine_id == "AMOXICILLIN")]
+        .sort_values("date")["prediction"]
+        .to_numpy()
+    )
+    bundle = ModelBundle(
+        name="naive",
+        model=SeasonalNaive(),
+        trained_until=origin - dt.timedelta(days=1),
+        uncertainty=UncertaintyModel({}, 1.0, [1.0] * 14),
+    )
+    history = small_demand[small_demand["date"] < origin]
+
+    served = forecast_series(bundle, history, "H01", "AMOXICILLIN")
+
+    np.testing.assert_allclose(served["forecast_units"].to_numpy(), expected)

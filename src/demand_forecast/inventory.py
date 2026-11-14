@@ -32,28 +32,29 @@ class Recommendation:
 def reorder_recommendation(
     daily_forecast: Sequence[float],
     current_stock: float,
-    daily_error_std: float,
+    lead_time_error_std: float,
     service_level: float = 0.95,
 ) -> Recommendation:
-    """Classic reorder-point logic with a safety stock sized from forecast error.
+    """Classic reorder-point logic with a safety stock sized from measured forecast error.
 
     Args:
         daily_forecast: forecast units for each day of the supplier lead time.
         current_stock: units on the shelf now.
-        daily_error_std: standard deviation of the model's daily forecast error.
+        lead_time_error_std: standard deviation of the forecast error of total demand
+            over the lead time (see `uncertainty.UncertaintyModel.lead_time_std`).
         service_level: probability of not running out during the lead time (e.g. 0.95).
     """
     if len(daily_forecast) == 0:
         raise ValueError("daily_forecast must contain at least one day")
-    if current_stock < 0 or daily_error_std < 0:
-        raise ValueError("current_stock and daily_error_std must be >= 0")
+    if current_stock < 0 or lead_time_error_std < 0:
+        raise ValueError("current_stock and lead_time_error_std must be >= 0")
     if not 0 < service_level < 1:
         raise ValueError("service_level must be between 0 and 1 (exclusive)")
 
     lead_time = len(daily_forecast)
     expected = float(sum(daily_forecast))
     z = NormalDist().inv_cdf(service_level)
-    safety = z * daily_error_std * math.sqrt(lead_time)
+    safety = z * lead_time_error_std
     reorder_point = expected + safety
     order_qty = max(0, math.ceil(reorder_point - current_stock))
 

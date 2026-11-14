@@ -93,3 +93,23 @@ def test_missing_model_file_fails_at_startup(tmp_path):
 
     with pytest.raises(FileNotFoundError), TestClient(app):
         pass
+
+
+def test_too_short_history_is_422_not_500(small_demand, tmp_path):
+    from demand_forecast.forecast import ModelBundle  # noqa: PLC0415
+    from demand_forecast.models import SeasonalNaive  # noqa: PLC0415
+    from demand_forecast.uncertainty import UncertaintyModel  # noqa: PLC0415
+
+    short = small_demand.groupby(["hospital_id", "medicine_id"]).head(30)
+    save_demand(short, tmp_path / "short.csv")
+    bundle = ModelBundle(
+        "naive", SeasonalNaive(), short["date"].max(), UncertaintyModel({}, 1.0, [1.0] * 14)
+    )
+    bundle.save(tmp_path / "m.joblib")
+    app = create_app(model_path=tmp_path / "m.joblib", data_path=tmp_path / "short.csv")
+
+    with TestClient(app) as c:
+        r = c.post("/forecast", json=body())
+
+    assert r.status_code == 422
+    assert "history" in r.json()["detail"]

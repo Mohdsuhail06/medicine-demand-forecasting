@@ -70,6 +70,11 @@ def _cmd_generate(args) -> int:
 def _cmd_train(args) -> int:
     from demand_forecast.train import train  # heavy imports only when needed
 
+    if not args.data.exists():
+        print(
+            f"error: {args.data} not found. Run 'demand-forecast generate' first.", file=sys.stderr
+        )
+        return 2
     factories = MODEL_FACTORIES
     if args.models:
         unknown = [m for m in args.models if m not in MODEL_FACTORIES]
@@ -91,6 +96,10 @@ def _cmd_train(args) -> int:
 def _cmd_forecast(args) -> int:
     from demand_forecast.forecast import ModelBundle, recommend
 
+    for path, step in ((args.model, "train"), (args.data, "generate")):
+        if not path.exists():
+            print(f"error: {path} not found. Run 'demand-forecast {step}' first.", file=sys.stderr)
+            return 2
     bundle = ModelBundle.load(args.model)
     try:
         result = recommend(

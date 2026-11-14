@@ -1,10 +1,10 @@
 {
   "best_model": "Gradient boosting",
   "periods": {
-    "validation_start": "2025-04-01",
-    "validation_end": "2025-09-30",
-    "holdout_start": "2025-10-01",
-    "holdout_end": "2025-12-31"
+    "validation_scored": "2025-04-01 to 2025-09-29",
+    "validation_windows": 13,
+    "holdout_scored": "2025-10-01 to 2025-12-23",
+    "holdout_windows": 6
   },
   "data": {
     "rows": 65760,
@@ -136,5 +136,10 @@
       "wape": 23.07,
       "bias": -2.36
     }
-  ]
+  ],
+  "safety_stock_coverage_95": {
+    "3": 0.936,
+    "7": 0.922,
+    "14": 0.925
+  }
 }

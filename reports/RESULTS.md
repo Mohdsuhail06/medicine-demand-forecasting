@@ -4,7 +4,7 @@ Data: 65,760 rows, 60 series (2023-01-01 to 2025-12-31).
 
 Best model (chosen on validation): **Gradient boosting**. WAPE drops from **25.8%** (seasonal naive) to **19.2%** (26% fewer errors).
 
-## Validation (2025-04-01 to 2025-09-30) - used to choose the model
+## Validation (2025-04-01 to 2025-09-29, 13 forecast windows) - used to choose the model
 
 | model | mae | rmse | wape | bias |
 | --- | --- | --- | --- | --- |
@@ -14,7 +14,7 @@ Best model (chosen on validation): **Gradient boosting**. WAPE drops from **25.8
 | Moving average (28d) | 14.83 | 23.82 | 25.0 | 1.39 |
 | Seasonal naive | 15.7 | 25.5 | 26.47 | 0.45 |
 
-## Holdout (2025-10-01 to 2025-12-31) - final, untouched check
+## Holdout (2025-10-01 to 2025-12-23, 6 forecast windows) - final check, not used to choose the model
 
 | model | mae | rmse | wape | bias |
 | --- | --- | --- | --- | --- |
@@ -39,6 +39,14 @@ Best model (chosen on validation): **Gradient boosting**. WAPE drops from **25.8
 | Respiratory | 6.16 | 8.86 | 23.07 | -2.36 |
 
 ![Error by category](error_by_category.png)
+
+## Safety stock check (target: 95% of windows without a stock-out)
+
+| lead time (days) | covered on holdout |
+| --- | --- |
+| 3 | 93.6% |
+| 7 | 92.2% |
+| 14 | 92.5% |
 
 ## Forecast examples
 

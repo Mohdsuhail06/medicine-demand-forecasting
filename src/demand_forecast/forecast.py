@@ -13,6 +13,7 @@ import pandas as pd
 
 from demand_forecast.features import FEATURE_COLUMNS, HISTORY_FEATURES, HORIZON, make_features
 from demand_forecast.inventory import reorder_recommendation
+from demand_forecast.uncertainty import UncertaintyModel
 
 
 @dataclass
@@ -22,8 +23,7 @@ class ModelBundle:
     name: str
     model: Any
     trained_until: dt.date
-    error_std: dict[tuple[str, str], float]
-    default_error_std: float
+    uncertainty: UncertaintyModel  # forecast error over the lead time, from validation
     metrics: dict = field(default_factory=dict)
     feature_columns: list[str] = field(default_factory=lambda: list(FEATURE_COLUMNS))
 
@@ -92,7 +92,7 @@ def recommend(
     if not 1 <= lead_time_days <= HORIZON:
         raise ValueError(f"lead_time_days must be between 1 and {HORIZON}")
     fc = forecast_series(bundle, history, hospital_id, medicine_id)
-    std = bundle.error_std.get((hospital_id, medicine_id), bundle.default_error_std)
+    std = bundle.uncertainty.lead_time_std(hospital_id, medicine_id, lead_time_days)
     rec = reorder_recommendation(
         fc["forecast_units"].iloc[:lead_time_days].tolist(), current_stock, std, service_level
     )

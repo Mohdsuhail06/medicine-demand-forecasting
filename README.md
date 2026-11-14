@@ -64,8 +64,11 @@ days, then moves forward 14 days and repeats ([`evaluate.py`](src/demand_forecas
 | Period | Dates | Used for |
 |---|---|---|
 | Training | 2023-03 → each forecast origin | fitting |
-| Validation | 2025-04-01 → 2025-09-30 (13 origins) | **choosing** the model |
-| Holdout | 2025-10-01 → 2025-12-31 (6 origins) | **final check**, untouched until the end |
+| Validation | 13 × 14-day windows, 2025-04-01 → 2025-09-29 | **choosing** the model and measuring forecast uncertainty |
+| Holdout | 6 × 14-day windows, 2025-10-01 → 2025-12-23 | **final check**, never used for any choice |
+
+The deployed model is then retrained on all the data, as is standard; every score in this
+README comes from the backtests above.
 
 ### 4. Models compared
 
@@ -77,14 +80,17 @@ days, then moves forward 14 days and repeats ([`evaluate.py`](src/demand_forecas
 | Moving average, 28 days (baseline) | 25.1% | 16.3 | −4.4% |
 | Seasonal naive (baseline) | 25.8% | 16.7 | −2.0% |
 
-*WAPE = total absolute error ÷ total demand. Validation and holdout scores agree closely
-(19.3% vs 19.2%), so the model is not overfitting. Part of the remaining error is the
-random day-to-day noise built into the data, which no model can predict.*
+*WAPE = total absolute error ÷ total demand. Gradient boosting and random forest are
+effectively tied (0.2 points apart on one simulated dataset); both clearly beat the
+baselines. Performance is stable across two out-of-sample periods (19.3% on validation,
+19.2% on holdout). Part of the remaining error is the random day-to-day noise built into
+the data, which no model can predict.*
 
 ![Forecast examples](reports/forecast_example.png)
 
-The most important features are recent demand levels (28- and 7-day means) and the
-weekend flag, which matches how the data was generated:
+Permutation importance, measured out of sample (a model fit before the holdout, scored
+on the holdout), shows that recent demand levels (28- and 7-day means) and the weekend
+flag matter most, which matches how the data was generated:
 
 ![Feature importance](reports/feature_importance.png)
 
@@ -93,13 +99,22 @@ weekend flag, which matches how the data was generated:
 [`inventory.py`](src/demand_forecast/inventory.py) applies the classic reorder-point method:
 
 ```
-safety stock  = z(service level) × daily forecast error × √(lead time)
-reorder point = forecast demand during lead time + safety stock
-order now     = max(0, reorder point − current stock)
+lead-time error = factor(L) × daily RMSE of the series × √L      (measured on validation)
+safety stock    = z(service level) × lead-time error
+reorder point   = forecast demand during lead time + safety stock
+order now       = max(0, reorder point − current stock)
 ```
 
-The daily forecast error is measured per hospital and medicine on the holdout period, so
-less predictable medicines automatically get a bigger buffer. Each recommendation gets a
+[`uncertainty.py`](src/demand_forecast/uncertainty.py) measures the daily error per hospital
+and medicine, so less predictable medicines get a bigger buffer. The textbook √L rule
+assumes daily errors are independent, but errors on neighbouring days move together, so
+`factor(L)` is measured from the backtest (it grows from about 1.0 at L = 1 to 1.25 at L = 14).
+
+**Does the buffer work?** On the holdout, demand stayed within forecast + safety stock in
+**93.6%, 92.2% and 92.5%** of windows for lead times of 3, 7 and 14 days, against a 95%
+target. The gap is honest: the uncertainty is measured on April–September, and the
+holdout is winter, when flu outbreaks add errors the calmer months never show. A
+season-aware error model is the next improvement. Each recommendation gets a
 status: **Urgent order**, **Reorder**, **OK** or **Overstock** (more than 60 days of cover,
 which risks expiry).
 
@@ -139,9 +154,9 @@ curl -X POST http://127.0.0.1:8000/forecast \
   "forecast": [{"date": "2026-01-01", "units": 191.9}, {"date": "2026-01-02", "units": 118.3}, "..."],
   "recommendation": {
     "expected_demand": 1188.2,
-    "safety_stock": 133.6,
-    "reorder_point": 1321.8,
-    "order_quantity": 1022,
+    "safety_stock": 102.1,
+    "reorder_point": 1290.3,
+    "order_quantity": 991,
     "days_of_cover": 1.8,
     "status": "Urgent order"
   }
@@ -153,8 +168,9 @@ Other endpoints: `GET /health`, `GET /hospitals`, `GET /medicines`. Inputs are v
 
 ## Testing
 
-66 tests: data patterns, leakage checks, metrics, backtesting, the reorder logic, the API
-and the CLI. Warnings are treated as errors.
+80 tests (97% coverage): data patterns, leakage checks, train/serve consistency, model
+selection on validation only, metrics, backtesting, safety-stock calibration, the reorder
+logic, the API and the CLI. Warnings are treated as errors.
 
 ```bash
 pytest --cov=demand_forecast
@@ -174,6 +190,7 @@ medicine-demand-forecasting/
 │   ├── evaluate.py    # metrics and rolling-origin backtesting
 │   ├── train.py       # model selection, final training, report
 │   ├── forecast.py    # model bundle + inference
+│   ├── uncertainty.py # forecast error over the lead time, coverage check
 │   ├── inventory.py   # safety stock and reorder recommendation
 │   ├── api.py         # FastAPI service
 │   └── cli.py         # `demand-forecast` command
@@ -185,6 +202,11 @@ medicine-demand-forecasting/
 
 - The data is **simulated**. On real hospital data the patterns would be less clean and
   extra signals (prices, stock-outs, public holidays, disease surveillance) would help.
+- Every horizon day uses lags of at least 14 days, so the day-1 forecast ignores the most
+  recent 13 days. This keeps one simple, leak-free model; separate models per horizon would
+  be the usual upgrade for short lead times.
+- The order quantity ignores stock already on order and review periods; a real system would
+  subtract open orders before recommending a new one.
 - The model is trained once and stored with `joblib`. Only load model files you created
   yourself, because `joblib` files can run code when loaded.
 - The API has no authentication; it is meant to run locally or behind a gateway.

@@ -20,9 +20,10 @@ import pandas as pd  # noqa: E402
 from sklearn.inspection import permutation_importance  # noqa: E402
 
 from demand_forecast.evaluate import compare_models, forecast_origins, metrics  # noqa: E402
-from demand_forecast.features import FEATURE_COLUMNS, make_features  # noqa: E402
+from demand_forecast.features import FEATURE_COLUMNS, HORIZON, MAX_LOOKBACK, make_features  # noqa: E402
 from demand_forecast.forecast import ModelBundle  # noqa: E402
 from demand_forecast.models import MODEL_FACTORIES  # noqa: E402
+from demand_forecast.uncertainty import fit_uncertainty, safety_stock_coverage  # noqa: E402
 
 MIN_TRAINING_DAYS = 56
 
@@ -148,30 +149,29 @@ def train(
     last = max(demand["date"])
     periods = split_periods(last, holdout_days, validation_days)
     if feats.empty or (periods.validation_start - feats["date"].min()).days < MIN_TRAINING_DAYS:
-        needed = 70 + MIN_TRAINING_DAYS + validation_days + holdout_days
+        needed = MAX_LOOKBACK + MIN_TRAINING_DAYS + validation_days + holdout_days
         raise ValueError(f"Not enough history: about {needed} days of data are needed")
 
     val_origins = forecast_origins(periods.validation_start, periods.validation_end)
     hold_origins = forecast_origins(periods.holdout_start, periods.holdout_end)
 
-    val_scores, _ = compare_models(feats, factories, val_origins)
+    val_scores, val_preds = compare_models(feats, factories, val_origins)
     best = str(val_scores.iloc[0]["model"])
     hold_scores, hold_preds = compare_models(feats, factories, hold_origins)
-    best_preds = hold_preds[best].copy()
-    best_preds["error"] = best_preds["prediction"] - best_preds["units"]
+    best_preds = hold_preds[best]
 
-    error_std = {
-        key: float(group.std(ddof=1))
-        for key, group in best_preds.groupby(["hospital_id", "medicine_id"])["error"]
-    }
+    # Uncertainty is estimated on validation and checked on the holdout, never both on one.
+    uncertainty = fit_uncertainty(val_preds[best])
+    coverage = safety_stock_coverage(best_preds, uncertainty, service_level=0.95)
+
+    # The deployed model uses all data. The scores reported are the backtest scores.
     final_model = factories[best]().fit(feats[FEATURE_COLUMNS], feats["units"])
     bundle = ModelBundle(
         name=best,
         model=final_model,
         trained_until=last,
-        error_std=error_std,
-        default_error_std=float(best_preds["error"].std(ddof=1)),
-        metrics={"holdout": metrics(best_preds["units"], best_preds["prediction"])},
+        uncertainty=uncertainty,
+        metrics={"holdout_backtest": metrics(best_preds["units"], best_preds["prediction"])},
     )
     bundle_path = bundle.save(Path(models_dir) / "model.joblib")
 
@@ -186,11 +186,20 @@ def train(
     )
     _plot_comparison(hold_scores, best, reports / "model_comparison.png")
     _plot_examples(best_preds, reports / "forecast_example.png")
+    # Importance is measured out of sample: a model fit before the holdout, scored on it.
+    before = feats[feats["date"] < periods.holdout_start]
+    pre_holdout_model = factories[best]().fit(before[FEATURE_COLUMNS], before["units"])
     holdout_feats = feats[feats["date"] >= periods.holdout_start]
-    _plot_importance(final_model, holdout_feats, reports / "feature_importance.png")
+    _plot_importance(pre_holdout_model, holdout_feats, reports / "feature_importance.png")
     _plot_by_category(by_cat, reports / "error_by_category.png")
 
-    period_info = {k: v.isoformat() for k, v in periods.__dict__.items()}
+    last_day = dt.timedelta(days=HORIZON - 1)
+    period_info = {
+        "validation_scored": f"{val_origins[0]} to {val_origins[-1] + last_day}",
+        "validation_windows": len(val_origins),
+        "holdout_scored": f"{hold_origins[0]} to {hold_origins[-1] + last_day}",
+        "holdout_windows": len(hold_origins),
+    }
     data_info = {
         "rows": len(demand),
         "series": int(demand.groupby(["hospital_id", "medicine_id"]).ngroups),
@@ -204,6 +213,7 @@ def train(
         "validation": _round_table(val_scores).to_dict(orient="records"),
         "holdout": _round_table(hold_scores).to_dict(orient="records"),
         "holdout_by_category": _round_table(by_cat).to_dict(orient="records"),
+        "safety_stock_coverage_95": {str(k): round(v, 3) for k, v in coverage.items()},
     }
     (reports / "metrics.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
@@ -223,12 +233,13 @@ def train(
         "",
         f"Best model (chosen on validation): **{best}**. {gain}",
         "",
-        f"## Validation ({periods.validation_start} to {periods.validation_end}) "
-        "- used to choose the model",
+        f"## Validation ({period_info['validation_scored']}, "
+        f"{len(val_origins)} forecast windows) - used to choose the model",
         "",
         _to_markdown(_round_table(val_scores)),
         "",
-        f"## Holdout ({periods.holdout_start} to {periods.holdout_end}) - final, untouched check",
+        f"## Holdout ({period_info['holdout_scored']}, {len(hold_origins)} forecast windows) "
+        "- final check, not used to choose the model",
         "",
         _to_markdown(_round_table(hold_scores)),
         "",
@@ -239,6 +250,12 @@ def train(
         _to_markdown(_round_table(by_cat)),
         "",
         "![Error by category](error_by_category.png)",
+        "",
+        "## Safety stock check (target: 95% of windows without a stock-out)",
+        "",
+        "| lead time (days) | covered on holdout |",
+        "| --- | --- |",
+        *[f"| {k} | {v * 100:.1f}% |" for k, v in coverage.items()],
         "",
         "## Forecast examples",
         "",
