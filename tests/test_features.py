@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from demand_forecast.features import FEATURE_COLUMNS, HORIZON, make_features
+from demand_forecast.features import FEATURE_COLUMNS, FEATURE_LABELS, HORIZON, make_features
 
 
 def one_series(values: list[int], start=dt.date(2025, 1, 1)) -> pd.DataFrame:
@@ -114,3 +114,9 @@ def test_duplicate_days_are_rejected():
 
     with pytest.raises(ValueError, match="consecutive"):
         make_features(df)
+
+
+def test_every_feature_has_a_readable_chart_label():
+    assert set(FEATURE_LABELS) == set(FEATURE_COLUMNS)
+    assert len(set(FEATURE_LABELS.values())) == len(FEATURE_LABELS)  # no two alike
+    assert FEATURE_LABELS["lag_14"] == "Demand 14 days earlier"

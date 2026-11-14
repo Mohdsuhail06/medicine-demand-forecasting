@@ -30,6 +30,22 @@ HISTORY_FEATURES = (
 )
 FEATURE_COLUMNS = CATEGORICAL_FEATURES + CALENDAR_FEATURES + HISTORY_FEATURES
 
+# Plain-English names for charts. History windows end HORIZON days before the forecast day.
+FEATURE_LABELS = {
+    "hospital_code": "Hospital",
+    "medicine_code": "Medicine",
+    "category_code": "Medicine category",
+    "day_of_week": "Day of week",
+    "is_weekend": "Weekend (Fri/Sat)",
+    "month": "Month",
+    "doy_sin": "Time of year (sine)",
+    "doy_cos": "Time of year (cosine)",
+    "is_ramadan": "Ramadan",
+    **{f"lag_{k}": f"Demand {k} days earlier" for k in LAGS},
+    **{f"roll_mean_{w}": f"Average demand over {w} days" for w in WINDOWS},
+    "roll_std_28": "Demand variability over 28 days",
+}
+
 
 def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
     """Add day-of-week, weekend, month, cyclical day-of-year and Ramadan flags."""

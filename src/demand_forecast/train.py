@@ -20,7 +20,13 @@ import pandas as pd  # noqa: E402
 from sklearn.inspection import permutation_importance  # noqa: E402
 
 from demand_forecast.evaluate import compare_models, forecast_origins, metrics  # noqa: E402
-from demand_forecast.features import FEATURE_COLUMNS, HORIZON, MAX_LOOKBACK, make_features  # noqa: E402
+from demand_forecast.features import (  # noqa: E402
+    FEATURE_COLUMNS,
+    FEATURE_LABELS,
+    HORIZON,
+    MAX_LOOKBACK,
+    make_features,
+)
 from demand_forecast.forecast import ModelBundle  # noqa: E402
 from demand_forecast.models import MODEL_FACTORIES  # noqa: E402
 from demand_forecast.uncertainty import fit_uncertainty, safety_stock_coverage  # noqa: E402
@@ -109,10 +115,17 @@ def _plot_importance(model, feats: pd.DataFrame, path: Path) -> None:
         scoring="neg_mean_absolute_error",
     )
     imp = pd.Series(result.importances_mean, index=FEATURE_COLUMNS).sort_values().tail(12)
-    fig, ax = plt.subplots(figsize=(9, 5))
-    ax.barh(imp.index, imp.values, color="#43a047")
-    ax.set_xlabel("Increase in MAE when the feature is shuffled (units)")
-    ax.set_title("Which features matter most? (permutation importance)")
+    fig, ax = plt.subplots(figsize=(10, 5.5))
+    ax.barh([FEATURE_LABELS[f] for f in imp.index], imp.values, color="#43a047")
+    ax.set_xlabel("Extra forecast error when this information is scrambled (units/day)")
+    ax.set_title("Which information matters most to the model?")
+    fig.text(
+        0.01,
+        0.01,
+        f"Averages and past demand all end {HORIZON} days before the forecast day (no peeking).",
+        fontsize=8,
+        color="#555555",
+    )
     fig.tight_layout()
     fig.savefig(path, dpi=130)
     plt.close(fig)
