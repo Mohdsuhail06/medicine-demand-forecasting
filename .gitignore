@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# generated: re-create with `demand-forecast generate` and `demand-forecast train`
+data/
+models/
+
+.env
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

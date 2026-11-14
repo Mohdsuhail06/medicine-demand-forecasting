@@ -1,0 +1,140 @@
+{
+  "best_model": "Gradient boosting",
+  "periods": {
+    "validation_start": "2025-04-01",
+    "validation_end": "2025-09-30",
+    "holdout_start": "2025-10-01",
+    "holdout_end": "2025-12-31"
+  },
+  "data": {
+    "rows": 65760,
+    "series": 60,
+    "start": "2023-01-01",
+    "end": "2025-12-31"
+  },
+  "validation": [
+    {
+      "model": "Gradient boosting",
+      "mae": 11.44,
+      "rmse": 18.69,
+      "wape": 19.28,
+      "bias": -0.19
+    },
+    {
+      "model": "Random forest",
+      "mae": 11.62,
+      "rmse": 18.85,
+      "wape": 19.59,
+      "bias": -0.05
+    },
+    {
+      "model": "Ridge regression",
+      "mae": 13.09,
+      "rmse": 21.83,
+      "wape": 22.06,
+      "bias": -5.52
+    },
+    {
+      "model": "Moving average (28d)",
+      "mae": 14.83,
+      "rmse": 23.82,
+      "wape": 25.0,
+      "bias": 1.39
+    },
+    {
+      "model": "Seasonal naive",
+      "mae": 15.7,
+      "rmse": 25.5,
+      "wape": 26.47,
+      "bias": 0.45
+    }
+  ],
+  "holdout": [
+    {
+      "model": "Gradient boosting",
+      "mae": 12.41,
+      "rmse": 20.78,
+      "wape": 19.18,
+      "bias": -0.78
+    },
+    {
+      "model": "Random forest",
+      "mae": 12.56,
+      "rmse": 21.07,
+      "wape": 19.41,
+      "bias": -1.14
+    },
+    {
+      "model": "Ridge regression",
+      "mae": 14.63,
+      "rmse": 29.48,
+      "wape": 22.62,
+      "bias": -3.75
+    },
+    {
+      "model": "Moving average (28d)",
+      "mae": 16.25,
+      "rmse": 27.21,
+      "wape": 25.11,
+      "bias": -4.41
+    },
+    {
+      "model": "Seasonal naive",
+      "mae": 16.68,
+      "rmse": 28.18,
+      "wape": 25.78,
+      "bias": -1.97
+    }
+  ],
+  "holdout_by_category": [
+    {
+      "category": "Allergy",
+      "mae": 5.23,
+      "rmse": 7.35,
+      "wape": 23.91,
+      "bias": -2.85
+    },
+    {
+      "category": "Analgesic",
+      "mae": 25.64,
+      "rmse": 38.7,
+      "wape": 17.69,
+      "bias": -0.5
+    },
+    {
+      "category": "Antibiotic",
+      "mae": 11.08,
+      "rmse": 16.66,
+      "wape": 20.24,
+      "bias": -2.92
+    },
+    {
+      "category": "Cardiovascular",
+      "mae": 11.33,
+      "rmse": 15.33,
+      "wape": 19.95,
+      "bias": -0.25
+    },
+    {
+      "category": "Diabetes",
+      "mae": 11.44,
+      "rmse": 17.34,
+      "wape": 18.69,
+      "bias": -0.73
+    },
+    {
+      "category": "Gastrointestinal",
+      "mae": 9.27,
+      "rmse": 14.6,
+      "wape": 20.02,
+      "bias": 1.08
+    },
+    {
+      "category": "Respiratory",
+      "mae": 6.16,
+      "rmse": 8.86,
+      "wape": 23.07,
+      "bias": -2.36
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+# Pinned runtime versions used for the published results. Install with: pip install -r requirements.txt
+fastapi==0.162.7
+joblib==1.6.0
+matplotlib==3.11.2
+numpy==2.5.4
+pandas==3.1.1
+pydantic==2.14.3
+scikit-learn==1.9.1
+uvicorn==0.54.0
